@@ -4,7 +4,7 @@ OpenAI API endpoints
 
 import time
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -60,8 +60,14 @@ async def chat_completions(
     debug_log("收到chat completions请求")
     
     try:
-        # Validate API key (skip if SKIP_AUTH_TOKEN is enabled)
-        if not settings.SKIP_AUTH_TOKEN:
+        # 提取下游key
+        downstream_key = None
+        if settings.USE_DOWNSTREAM_KEYS and authorization.startswith("Bearer "):
+            downstream_key = authorization[7:]  # 去掉"Bearer "前缀
+            debug_log(f"使用下游key作为认证token: {downstream_key[:10]}...")
+        
+        # 如果不是使用下游key模式，验证API key（如果SKIP_AUTH_TOKEN未启用）
+        if not settings.USE_DOWNSTREAM_KEYS and not settings.SKIP_AUTH_TOKEN:
             if not authorization.startswith("Bearer "):
                 debug_log("缺少或无效的Authorization头")
                 raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -72,8 +78,9 @@ async def chat_completions(
                 raise HTTPException(status_code=401, detail="Invalid API key")
             
             debug_log(f"API key验证通过，AUTH_TOKEN={api_key[:8]}......")
-        else:
+        elif not settings.USE_DOWNSTREAM_KEYS and settings.SKIP_AUTH_TOKEN:
             debug_log("SKIP_AUTH_TOKEN已启用，跳过API key验证")
+        
         debug_log(f"请求解析成功 - 模型: {request.model}, 流式: {request.stream}, 消息数: {len(request.messages)}")
         
         # Generate IDs
@@ -142,8 +149,8 @@ async def chat_completions(
             }
         )
         
-        # Get authentication token
-        auth_token = get_auth_token()
+        # Get authentication token (pass downstream_key if available)
+        auth_token = get_auth_token(downstream_key)
         
         # Check if tools are enabled and present
         has_tools = (settings.TOOL_SUPPORT and 
