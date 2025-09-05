@@ -3,7 +3,7 @@ FastAPI application configuration module
 """
 
 import os
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from pydantic_settings import BaseSettings
 
 
@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     TOOL_SUPPORT: bool = os.getenv("TOOL_SUPPORT", "true").lower() == "true"
     SCAN_LIMIT: int = int(os.getenv("SCAN_LIMIT", "200000"))
     SKIP_AUTH_TOKEN: bool = os.getenv("SKIP_AUTH_TOKEN", "false").lower() == "true"
+    
+    # Render Deployment Configuration
+    RENDER_DEPLOYMENT: bool = os.getenv("RENDER_DEPLOYMENT", "true").lower() == "true"
+    USE_DOWNSTREAM_KEYS: bool = os.getenv("USE_DOWNSTREAM_KEYS", "true").lower() == "true"
+    DOWNSTREAM_KEYS: List[str] = os.getenv("DOWNSTREAM_KEYS", "").split(",") if os.getenv("DOWNSTREAM_KEYS") else []
     
     # Browser Headers
     CLIENT_HEADERS: Dict[str, str] = {
