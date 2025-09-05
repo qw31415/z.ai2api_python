@@ -1,57 +1,89 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
-FastAPI application configuration module
+Application configuration
 """
 
 import os
-from typing import Dict, Optional, List
+from typing import Dict, List, Optional
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings"""
     
-    # API Configuration
-    API_ENDPOINT: str = os.getenv("API_ENDPOINT", "https://chat.z.ai/api/chat/completions")
-    AUTH_TOKEN: str = os.getenv("AUTH_TOKEN", "sk-your-api-key")
-    BACKUP_TOKEN: str = os.getenv("BACKUP_TOKEN", "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjMxNmJjYjQ4LWZmMmYtNGExNS04NTNkLWYyYTI5YjY3ZmYwZiIsImVtYWlsIjoiR3Vlc3QtMTc1NTg0ODU4ODc4OEBndWVzdC5jb20ifQ.PktllDySS3trlyuFpTeIZf-7hl8Qu1qYF3BxjgIul0BrNux2nX9hVzIjthLXKMWAf9V0qM8Vm_iyDqkjPGsaiQ")
+    # Basic settings
+    AUTH_TOKEN: str = "sk-your-api-key"
+    API_ENDPOINT: str = "https://chat.z.ai/api/chat/completions"
+    LISTEN_PORT: int = 8080
+    DEBUG_LOGGING: bool = True
     
-    # Model Configuration
-    PRIMARY_MODEL: str = os.getenv("PRIMARY_MODEL", "GLM-4.5")
-    THINKING_MODEL: str = os.getenv("THINKING_MODEL", "GLM-4.5-Thinking")
-    SEARCH_MODEL: str = os.getenv("SEARCH_MODEL", "GLM-4.5-Search")
-    AIR_MODEL: str = os.getenv("AIR_MODEL", "GLM-4.5-Air")
+    # Model settings
+    PRIMARY_MODEL: str = "GLM-4.5"
+    THINKING_MODEL: str = "GLM-4.5-Thinking"
+    SEARCH_MODEL: str = "GLM-4.5-Search"
+    AIR_MODEL: str = "GLM-4.5-Air"
     
-    # Server Configuration
-    LISTEN_PORT: int = int(os.getenv("LISTEN_PORT", "8080"))
-    DEBUG_LOGGING: bool = os.getenv("DEBUG_LOGGING", "true").lower() == "true"
+    # Feature settings
+    THINKING_PROCESSING: str = "think"  # think, strip, raw
+    ANONYMOUS_MODE: bool = True
+    TOOL_SUPPORT: bool = True
+    SKIP_AUTH_TOKEN: bool = False
+    SCAN_LIMIT: int = 200000
     
-    # Feature Configuration
-    THINKING_PROCESSING: str = os.getenv("THINKING_PROCESSING", "think")  # strip: 去除<details>标签；think: 转为<span>标签；raw: 保留原样
-    ANONYMOUS_MODE: bool = os.getenv("ANONYMOUS_MODE", "true").lower() == "true"
-    TOOL_SUPPORT: bool = os.getenv("TOOL_SUPPORT", "true").lower() == "true"
-    SCAN_LIMIT: int = int(os.getenv("SCAN_LIMIT", "200000"))
-    SKIP_AUTH_TOKEN: bool = os.getenv("SKIP_AUTH_TOKEN", "false").lower() == "true"
+    # Z.ai token
+    BACKUP_TOKEN: str = "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.TJVA95OrM7E2cBab30RMHrHDcEfxjoYZgeFONFh7HgQ"
     
-    # Render Deployment Configuration
-    RENDER_DEPLOYMENT: bool = os.getenv("RENDER_DEPLOYMENT", "true").lower() == "true"
-    USE_DOWNSTREAM_KEYS: bool = os.getenv("USE_DOWNSTREAM_KEYS", "true").lower() == "true"
-    DOWNSTREAM_KEYS: List[str] = os.getenv("DOWNSTREAM_KEYS", "").split(",") if os.getenv("DOWNSTREAM_KEYS") else []
-    
-    # Browser Headers
-    CLIENT_HEADERS: Dict[str, str] = {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0",
-        "Accept-Language": "zh-CN",
-        "sec-ch-ua": '"Not;A=Brand";v="99", "Microsoft Edge";v="139", "Chromium";v="139"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "X-FE-Version": "prod-fe-1.0.70",
-        "Origin": "https://chat.z.ai",
+    # MCP Server Configuration
+    MCP_SERVERS: Dict[str, Dict[str, str]] = {
+        "deep-web-search": {
+            "name": "deep-web-search",
+            "description": "Deep web search functionality",
+            "type": "search",
+            "enabled": "true"
+        },
+        "file-manager": {
+            "name": "file-manager", 
+            "description": "File management operations",
+            "type": "file",
+            "enabled": "false"
+        },
+        "code-executor": {
+            "name": "code-executor",
+            "description": "Code execution environment", 
+            "type": "code",
+            "enabled": "false"
+        }
     }
+    
+    # Tool Server Configuration
+    TOOL_SERVERS: List[str] = []
+    
+    # MCP Server Health Check
+    MCP_HEALTH_CHECK_ENABLED: bool = True
+    MCP_HEALTH_CHECK_TIMEOUT: int = 5
     
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
+        case_sensitive = True
+        
+    def get_enabled_mcp_servers(self) -> List[str]:
+        """Get list of enabled MCP servers"""
+        return [
+            server_name for server_name, config in self.MCP_SERVERS.items()
+            if config.get("enabled", "false").lower() == "true"
+        ]
+    
+    def get_mcp_server_config(self, server_name: str) -> Optional[Dict[str, str]]:
+        """Get configuration for specific MCP server"""
+        return self.MCP_SERVERS.get(server_name)
+    
+    def is_mcp_server_enabled(self, server_name: str) -> bool:
+        """Check if MCP server is enabled"""
+        config = self.get_mcp_server_config(server_name)
+        return config and config.get("enabled", "false").lower() == "true"
 
 
 settings = Settings()

@@ -4,7 +4,7 @@ OpenAI API endpoints
 
 import time
 from datetime import datetime
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -15,9 +15,11 @@ from app.models.schemas import (
 )
 from app.utils.helpers import debug_log, generate_request_ids, get_auth_token
 from app.utils.tools import process_messages_with_tools, content_to_string
+from app.utils.mcp_manager import MCPManager
 from app.core.response_handlers import StreamResponseHandler, NonStreamResponseHandler
 
 router = APIRouter()
+mcp_manager = MCPManager()
 
 
 @router.get("/v1/models")
@@ -60,14 +62,8 @@ async def chat_completions(
     debug_log("收到chat completions请求")
     
     try:
-        # 提取下游key
-        downstream_key = None
-        if settings.USE_DOWNSTREAM_KEYS and authorization.startswith("Bearer "):
-            downstream_key = authorization[7:]  # 去掉"Bearer "前缀
-            debug_log(f"使用下游key作为认证token: {downstream_key[:10]}...")
-        
-        # 如果不是使用下游key模式，验证API key（如果SKIP_AUTH_TOKEN未启用）
-        if not settings.USE_DOWNSTREAM_KEYS and not settings.SKIP_AUTH_TOKEN:
+        # Validate API key (skip if SKIP_AUTH_TOKEN is enabled)
+        if not settings.SKIP_AUTH_TOKEN:
             if not authorization.startswith("Bearer "):
                 debug_log("缺少或无效的Authorization头")
                 raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
@@ -78,9 +74,8 @@ async def chat_completions(
                 raise HTTPException(status_code=401, detail="Invalid API key")
             
             debug_log(f"API key验证通过，AUTH_TOKEN={api_key[:8]}......")
-        elif not settings.USE_DOWNSTREAM_KEYS and settings.SKIP_AUTH_TOKEN:
+        else:
             debug_log("SKIP_AUTH_TOKEN已启用，跳过API key验证")
-        
         debug_log(f"请求解析成功 - 模型: {request.model}, 流式: {request.stream}, 消息数: {len(request.messages)}")
         
         # Generate IDs
@@ -108,7 +103,6 @@ async def chat_completions(
         is_thinking = request.model == settings.THINKING_MODEL
         is_search = request.model == settings.SEARCH_MODEL
         is_air = request.model == settings.AIR_MODEL
-        search_mcp = "deep-web-search" if is_search else ""
         
         # Determine upstream model ID based on requested model
         if is_air:
@@ -117,6 +111,21 @@ async def chat_completions(
         else:
             upstream_model_id = "0727-360B-API"  # Default upstream model ID
             upstream_model_name = "GLM-4.5"
+        
+        # Get MCP servers based on model and request
+        mcp_servers = mcp_manager.get_mcp_servers_for_request(
+            model=request.model,
+            is_search=is_search,
+            has_tools=bool(request.tools)
+        )
+        
+        # Get tool servers
+        tool_servers = mcp_manager.get_tool_servers_for_request(
+            tools=request.tools
+        )
+        
+        debug_log(f"MCP服务器配置: {mcp_servers}")
+        debug_log(f"工具服务器配置: {tool_servers}")
         
         # Build upstream request
         upstream_req = UpstreamRequest(
@@ -135,13 +144,13 @@ async def chat_completions(
                 "title_generation": False,
                 "tags_generation": False,
             },
-            mcp_servers=[search_mcp] if search_mcp else [],
+            mcp_servers=mcp_servers,
             model_item=ModelItem(
                 id=upstream_model_id,
                 name=upstream_model_name,
                 owned_by="openai"
             ),
-            tool_servers=[],
+            tool_servers=tool_servers,
             variables={
                 "{{USER_NAME}}": "User",
                 "{{USER_LOCATION}}": "Unknown",
@@ -149,8 +158,8 @@ async def chat_completions(
             }
         )
         
-        # Get authentication token (pass downstream_key if available)
-        auth_token = get_auth_token(downstream_key)
+        # Get authentication token
+        auth_token = get_auth_token()
         
         # Check if tools are enabled and present
         has_tools = (settings.TOOL_SUPPORT and 
