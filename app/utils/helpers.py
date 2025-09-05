@@ -82,13 +82,13 @@ def get_browser_headers(referer_chat_id: str = "") -> Dict[str, str]:
             # Edge 基于 Chromium，使用 Edge 特定的 sec-ch-ua
             sec_ch_ua = f'"Microsoft Edge";v="{edge_version}", "Chromium";v="{chrome_version}", "Not_A Brand";v="24"'
         except:
-            sec_ch_ua = f'"Not_A Brand";v="8", "Chromium";v="{chrome_version}", "Google Chrome";v="{chrome_version}"'
+            sec_ch_ua = f'"Not;A=Brand";v="8", "Chromium";v="{chrome_version}", "Google Chrome";v="{chrome_version}"'
     elif "Firefox/" in user_agent:
         # Firefox 不使用 sec-ch-ua
         sec_ch_ua = None
     else:
         # Chrome 或其他基于 Chromium 的浏览器
-        sec_ch_ua = f'"Not_A Brand";v="8", "Chromium";v="{chrome_version}", "Google Chrome";v="{chrome_version}"'
+        sec_ch_ua = f'"Not;A=Brand";v="8", "Chromium";v="{chrome_version}", "Google Chrome";v="{chrome_version}"'
     
     # 构建动态 Headers
     headers = {
@@ -152,8 +152,14 @@ def get_anonymous_token() -> str:
         raise
 
 
-def get_auth_token() -> str:
-    """Get authentication token (anonymous or fixed)"""
+def get_auth_token(downstream_key: Optional[str] = None) -> str:
+    """Get authentication token (downstream key, anonymous or fixed)"""
+    # 如果启用了下游key并且提供了下游key，则使用下游key
+    if settings.USE_DOWNSTREAM_KEYS and downstream_key:
+        debug_log(f"使用下游key作为认证token: {downstream_key[:10]}...")
+        return downstream_key
+    
+    # 如果启用了匿名模式，尝试获取匿名token
     if settings.ANONYMOUS_MODE:
         try:
             token = get_anonymous_token()
@@ -162,6 +168,7 @@ def get_auth_token() -> str:
         except Exception as e:
             debug_log(f"匿名token获取失败，回退固定token: {e}")
     
+    # 默认使用备份token
     return settings.BACKUP_TOKEN
 
 
