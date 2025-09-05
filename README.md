@@ -32,12 +32,9 @@
 - `SCAN_LIMIT` - 扫描限制（默认：200000）
 - `SKIP_AUTH_TOKEN` - 跳过认证（默认：false）
 
-## 📝 README更新建议
-
-**需要更新README.md**，主要添加以下内容：
 
 ### 1. 新增Render部署章节
-```markdown
+
 ## 🚀 Render 部署
 
 ### 一键部署到 Render
