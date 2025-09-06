@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  api-server:
+    build: 
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: z-ai-api-server
+    ports:
+      - "8080:8080"
+    environment:
+      # Auth Configuration
+      - AUTH_TOKEN=sk-your-api-key
+      # 是否跳过api key验证
+      - SKIP_AUTH_TOKEN=false
+      # Server Configurations
+      - DEBUG_LOGGING=true
+      # Feature Configuration
+      - THINKING_PROCESSING=think
+      - ANONYMOUS_MODE=true
+      - TOOL_SUPPORT=true
+      - SCAN_LIMIT=200000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
